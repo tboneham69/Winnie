@@ -588,23 +588,10 @@ let activeModalType = null;
 // ── JSONBin.io Storage ─────────────────────────────────────────
 const JSONBIN_KEY = '$2a$10$zWjxoipl3SiLtpcSfhQpbOvWq20DdqL308P1bi1m6EXygeYNkkJsi';
 const JSONBIN_URL = 'https://api.jsonbin.io/v3/b';
-let BIN_ID = localStorage.getItem('winnie_bin_id') || null;
+const BIN_ID = '6a0395f4250b1311c33f0fdf';
 
 async function initBin() {
-  if (BIN_ID) return;
-  const res = await fetch(JSONBIN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': JSONBIN_KEY,
-      'X-Bin-Name': 'winnie-family-data',
-      'X-Bin-Private': 'false'
-    },
-    body: JSON.stringify({ chores: [], meals: [], car: [] })
-  });
-  const data = await res.json();
-  BIN_ID = data.metadata.id;
-  localStorage.setItem('winnie_bin_id', BIN_ID);
+  // Bin ID is hardcoded — all family devices share the same bin
 }
 
 async function loadAll() {
