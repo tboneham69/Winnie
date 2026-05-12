@@ -775,7 +775,7 @@ function renderCar() {
       <div class="card-header">
         <div>
           <div class="card-title">${c.purpose}</div>
-          ${c.time ? `<div class="card-meta">⏰ ${c.time}</div>` : ''}
+          ${c.time ? `<div class="card-meta">⏰ Leaving ${c.time}${c.returnTime ? ` &nbsp;·&nbsp; 🏠 Back by ${c.returnTime}` : ''}</div>` : ''}
         </div>
         <div class="card-badge ${badgeClass}">${badgeText}</div>
       </div>
@@ -929,13 +929,19 @@ function openModal(type) {
           <input class="form-input" type="date" id="f-date" value="${selectedCarDay||today}" />
         </div>
         <div class="form-group">
-          <label class="form-label">Time</label>
+          <label class="form-label">Leaving at</label>
           <input class="form-input" type="time" id="f-time" value="09:00" />
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Driver</label>
-        <select class="form-select" id="f-driver">${memberOptions}</select>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Back by</label>
+          <input class="form-input" type="time" id="f-return" value="12:00" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Driver</label>
+          <select class="form-select" id="f-driver">${memberOptions}</select>
+        </div>
       </div>
       <button class="submit-btn" onclick="submitItem()">Reserve Car</button>
     `;
@@ -983,6 +989,7 @@ function submitItem() {
     carItems.push({
       id, purpose, date,
       time: document.getElementById('f-time').value,
+      returnTime: document.getElementById('f-return').value,
       driver: document.getElementById('f-driver').value,
       status: 'reserved',
       createdBy: currentUser.name
