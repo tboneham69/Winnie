@@ -122,7 +122,7 @@
   .nav-tab .tab-icon { font-size: 16px; display: block; margin-bottom: 2px; }
 
   /* ── Main content ── */
-  .main { padding: 20px 16px 100px; max-width: 480px; margin: 0 auto; }
+  .main { padding: 20px 16px 120px; max-width: 480px; margin: 0 auto; }
 
   /* ── Section header ── */
   .section-header {
@@ -466,6 +466,42 @@
     border-radius: 10px;
     margin-top: 6px;
   }
+
+  /* ── Refresh bar ── */
+  .refresh-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    background: var(--bark);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    z-index: 100;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.15);
+  }
+  .refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,249,244,0.1);
+    border: 1px solid rgba(255,249,244,0.2);
+    border-radius: 30px;
+    padding: 8px 22px;
+    color: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .refresh-btn:hover { background: rgba(255,249,244,0.18); }
+  .refresh-btn:active { transform: scale(0.97); }
+  .refresh-icon { font-size: 15px; display: inline-block; transition: transform 0.5s; }
+  .refresh-icon.spinning { animation: spin 0.6s linear; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .refresh-time { font-size: 11px; color: rgba(255,249,244,0.45); letter-spacing: 0.5px; }
 </style>
 </head>
 <body>
@@ -550,6 +586,15 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+
+<!-- REFRESH BAR -->
+<div class="refresh-bar">
+  <button class="refresh-btn" onclick="refreshData()">
+    <span class="refresh-icon" id="refreshIcon">↻</span> Refresh
+  </button>
+  <span class="refresh-time" id="refreshTime">Tap to sync latest data</span>
+</div>
+
 <!-- USER MODAL -->
 <div class="modal-overlay" id="userModal">
   <div class="modal">
@@ -592,6 +637,18 @@ const BIN_ID = '6a0395f4250b1311c33f0fdf';
 
 async function initBin() {
   // Bin ID is hardcoded — all family devices share the same bin
+}
+
+
+async function refreshData() {
+  const icon = document.getElementById('refreshIcon');
+  const timeEl = document.getElementById('refreshTime');
+  icon.classList.add('spinning');
+  await loadAll();
+  icon.classList.remove('spinning');
+  const now = new Date();
+  const t = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  timeEl.textContent = 'Updated ' + t;
 }
 
 async function loadAll() {
@@ -656,7 +713,9 @@ function isOverdue(dateStr) {
 
 function formatDate(d) {
   if (!d) return '';
-  const dt = new Date(d);
+  // Parse YYYY-MM-DD directly to avoid UTC-to-local timezone shift
+  const [year, month, day] = d.split('-').map(Number);
+  const dt = new Date(year, month - 1, day);
   return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 
