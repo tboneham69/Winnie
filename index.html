@@ -536,6 +536,12 @@
 
 </div><!-- /main -->
 
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:flex;position:fixed;inset:0;background:rgba(250,247,242,0.92);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+  <div style="font-size:36px">🌿</div>
+  <div style="font-family:'DM Sans',sans-serif;font-size:14px;color:#7a6a5e;letter-spacing:1px;">Loading Winnie…</div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -574,25 +580,70 @@ let selectedCarDay = null;
 let activeTab = 'chores';
 let activeModalType = null;
 
-// ── Persistent storage helpers ─────────────────────────────────
-async function load(key) {
-  try {
-    const r = await window.storage.get(key, true);
-    return r ? JSON.parse(r.value) : [];
-  } catch { return []; }
+// ── JSONBin.io Storage ─────────────────────────────────────────
+const JSONBIN_KEY = '$2a$10$zWjxoipl3SiLtpcSfhQpbOvWq20DdqL308P1bi1m6EXygeYNkkJsi';
+const JSONBIN_URL = 'https://api.jsonbin.io/v3/b';
+let BIN_ID = localStorage.getItem('winnie_bin_id') || null;
+
+async function initBin() {
+  if (BIN_ID) return;
+  const res = await fetch(JSONBIN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': JSONBIN_KEY,
+      'X-Bin-Name': 'winnie-family-data',
+      'X-Bin-Private': 'false'
+    },
+    body: JSON.stringify({ chores: [], meals: [], car: [] })
+  });
+  const data = await res.json();
+  BIN_ID = data.metadata.id;
+  localStorage.setItem('winnie_bin_id', BIN_ID);
 }
-async function save(key, data) {
-  try { await window.storage.set(key, JSON.stringify(data), true); } catch {}
+
+async function loadAll() {
+  try {
+    showLoading(true);
+    await initBin();
+    const res = await fetch(`${JSONBIN_URL}/${BIN_ID}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const data = await res.json();
+    chores   = data.record.chores || [];
+    meals    = data.record.meals  || [];
+    carItems = data.record.car    || [];
+  } catch(e) {
+    console.error('Load failed:', e);
+    chores = []; meals = []; carItems = [];
+  } finally {
+    showLoading(false);
+    render();
+  }
+}
+
+async function saveAll() {
+  try {
+    await fetch(`${JSONBIN_URL}/${BIN_ID}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY
+      },
+      body: JSON.stringify({ chores, meals, car: carItems })
+    });
+  } catch(e) {
+    console.error('Save failed:', e);
+    toast('⚠️ Save failed — check connection');
+  }
+}
+
+function showLoading(on) {
+  const el = document.getElementById('loading-overlay');
+  if (el) el.style.display = on ? 'flex' : 'none';
 }
 
 let chores = [], meals = [], carItems = [];
-
-async function loadAll() {
-  chores   = await load('winnie:chores');
-  meals    = await load('winnie:meals');
-  carItems = await load('winnie:car');
-  render();
-}
 
 // ── Render helpers ─────────────────────────────────────────────
 function userColor(name) {
@@ -908,7 +959,7 @@ function submitItem() {
       status: 'pending',
       createdBy: currentUser.name
     });
-    save('winnie:chores', chores);
+    saveAll();
     toast('Chore added! 🧹');
   } else if (activeModalType === 'meal') {
     const dish = document.getElementById('f-dish').value.trim();
@@ -921,7 +972,7 @@ function submitItem() {
       cook: document.getElementById('f-cook').value,
       createdBy: currentUser.name
     });
-    save('winnie:meals', meals);
+    saveAll();
     toast('Meal planned! 🍽');
   } else if (activeModalType === 'car') {
     const purpose = document.getElementById('f-purpose').value.trim();
@@ -936,7 +987,7 @@ function submitItem() {
       status: 'reserved',
       createdBy: currentUser.name
     });
-    save('winnie:car', carItems);
+    saveAll();
     toast('Car reserved! 🚗');
   }
   closeModals();
@@ -948,21 +999,21 @@ function markDone(type, id) {
   if (type === 'chore') {
     const c = chores.find(x=>x.id===id);
     if (c) c.status = 'done';
-    save('winnie:chores', chores);
+    saveAll();
     toast('Great job! ✅');
   } else if (type === 'car') {
     const c = carItems.find(x=>x.id===id);
     if (c) c.status = 'returned';
-    save('winnie:car', carItems);
+    saveAll();
     toast('Car returned! 🗝');
   }
   render();
 }
 
 function deleteItem(type, id) {
-  if (type === 'chore')  { chores   = chores.filter(x=>x.id!==id);   save('winnie:chores',chores); }
-  if (type === 'meal')   { meals    = meals.filter(x=>x.id!==id);     save('winnie:meals',meals); }
-  if (type === 'car')    { carItems = carItems.filter(x=>x.id!==id);  save('winnie:car',carItems); }
+  if (type === 'chore')  { chores   = chores.filter(x=>x.id!==id);   saveAll(); }
+  if (type === 'meal')   { meals    = meals.filter(x=>x.id!==id);     saveAll(); }
+  if (type === 'car')    { carItems = carItems.filter(x=>x.id!==id);  saveAll(); }
   render();
   toast('Item removed');
 }
