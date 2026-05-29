@@ -692,13 +692,27 @@ async function refreshData() {
   timeEl.textContent = 'Updated ' + t;
 }
 
+async function fetchWithTimeout(url, options, ms=8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
 async function loadAll() {
   try {
     showLoading(true);
     await initBin();
-    const res = await fetch(`${JSONBIN_URL}/${BIN_ID}/latest`, {
+    const res = await fetchWithTimeout(`${JSONBIN_URL}/${BIN_ID}/latest`, {
       headers: { 'X-Master-Key': JSONBIN_KEY }
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     chores   = data.record.chores || [];
     meals    = data.record.meals  || [];
@@ -706,6 +720,8 @@ async function loadAll() {
   } catch(e) {
     console.error('Load failed:', e);
     chores = []; meals = []; carItems = [];
+    const reason = e.name === 'AbortError' ? 'Request timed out' : e.message || 'Unknown error';
+    toast('Could not load: ' + reason + ' — tap Refresh');
   } finally {
     showLoading(false);
     render();
