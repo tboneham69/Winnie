@@ -454,6 +454,47 @@
     transform: translateX(-50%) translateY(0);
   }
 
+  /* RSVP attendee chips on meal cards */
+  .rsvp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .rsvp-label {
+    font-size: 11px;
+    color: var(--text-soft);
+    font-weight: 500;
+  }
+  .rsvp-chip {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    color: var(--bark);
+    border: 2px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+  .rsvp-btn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1.5px solid var(--sage);
+    background: rgba(122,158,126,0.08);
+    color: var(--sage-dark);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .rsvp-btn:hover { background: rgba(122,158,126,0.18); }
+  .rsvp-btn.rsvp-attending {
+    background: var(--sage-dark);
+    color: white;
+    border-color: var(--sage-dark);
+  }
+
   /* Reminder badge */
   .reminder-tag {
     display: inline-flex;
@@ -706,6 +747,16 @@ function avatarHtml(name, size=20) {
   return `<div class="assignee-dot" style="background:${userColor(name)};width:${size}px;height:${size}px;font-size:${Math.round(size*0.48)}px">${userInitial(name)}</div>`;
 }
 
+function formatTime(t) {
+  if (!t) return '';
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
+
 function isOverdue(dateStr) {
   if (!dateStr) return false;
   return new Date(dateStr) < new Date(new Date().toDateString());
@@ -731,7 +782,13 @@ function renderChores() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">🧹</div><div class="empty-text">No chores here — enjoy the break!</div></div>`;
     return;
   }
-  el.innerHTML = list.map(c => {
+  // Sort ascending by due date (undated chores go to the end)
+  list.sort((a, b) => {
+    if (!a.due && !b.due) return 0;
+    if (!a.due) return 1;
+    if (!b.due) return -1;
+    return new Date(a.due) - new Date(b.due);
+  });
     const over = isOverdue(c.due) && c.status !== 'done';
     const badgeClass = c.status==='done' ? 'badge-done' : over ? 'badge-overdue' : 'badge-pending';
     const badgeText  = c.status==='done' ? '✓ Done' : over ? '⚠ Overdue' : 'Pending';
@@ -770,6 +827,11 @@ function renderMeals() {
   el.innerHTML = list.map(m => {
     const typeClass = 'badge-'+m.type;
     const cap = m.type.charAt(0).toUpperCase()+m.type.slice(1);
+    const attendees = m.attendees || [];
+    const isAttending = attendees.includes(currentUser.name);
+    const attendeeChips = attendees.map(n =>
+      `<div class="rsvp-chip" style="background:${userColor(n)}" title="${n}">${userInitial(n)}</div>`
+    ).join('');
     return `<div class="card">
       <div class="card-header">
         <div>
@@ -781,6 +843,13 @@ function renderMeals() {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;">
         <div class="assignee-chip">${avatarHtml(m.cook)} ${m.cook}</div>
         ${m.date ? `<div class="date-chip">📅 ${formatDate(m.date)}</div>` : ''}
+      </div>
+      <div class="rsvp-row">
+        <span class="rsvp-label">${attendees.length ? 'Attending:' : 'No RSVPs yet'}</span>
+        ${attendeeChips}
+        <button class="rsvp-btn ${isAttending ? 'rsvp-attending' : ''}" onclick="toggleRsvp('${m.id}')">
+          ${isAttending ? '✓ I\'ll be there' : '+ I\'ll attend'}
+        </button>
       </div>
       <div class="card-actions">
         <button class="card-btn danger" onclick="deleteItem('meal','${m.id}')">Delete</button>
@@ -826,7 +895,7 @@ function renderCar() {
       <div class="card-header">
         <div>
           <div class="card-title">${c.purpose}</div>
-          ${c.time ? `<div class="card-meta">⏰ Leaving ${c.time}${c.returnTime ? ` &nbsp;·&nbsp; 🏠 Back by ${c.returnTime}` : ''}</div>` : ''}
+          ${c.time ? `<div class="card-meta">⏰ Leaving ${formatTime(c.time)}${c.returnTime ? ` &nbsp;·&nbsp; 🏠 Back by ${formatTime(c.returnTime)}` : ''}</div>` : ''}
         </div>
         <div class="card-badge ${badgeClass}">${badgeText}</div>
       </div>
@@ -1035,8 +1104,21 @@ function submitItem() {
     const purpose = document.getElementById('f-purpose').value.trim();
     if (!purpose) { toast('Please enter a purpose'); return; }
     const date = document.getElementById('f-date').value;
-    const conflict = carItems.some(c=>c.date===date && c.status!=='returned');
-    if (conflict) { toast('⚠️ Car already reserved that day!'); return; }
+    const newStart = document.getElementById('f-time').value;
+    const newEnd   = document.getElementById('f-return').value;
+
+    // Check for time overlap on same day
+    const toMins = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+    const overlapping = carItems.filter(c => c.date === date && c.status !== 'returned').filter(c => {
+      if (!c.time || !c.returnTime || !newStart || !newEnd) return false;
+      const eStart = toMins(c.time), eEnd = toMins(c.returnTime);
+      const nStart = toMins(newStart),  nEnd  = toMins(newEnd);
+      return nStart < eEnd && nEnd > eStart;
+    });
+    if (overlapping.length > 0) {
+      const msg = overlapping.map(c => `${c.driver} (${formatTime(c.time)}–${formatTime(c.returnTime)})`).join(', ');
+      if (!confirm(`⚠️ Overlapping reservation exists:\n${msg}\n\nAdd your reservation anyway?`)) return;
+    }
     carItems.push({
       id, purpose, date,
       time: document.getElementById('f-time').value,
@@ -1074,6 +1156,22 @@ function deleteItem(type, id) {
   if (type === 'car')    { carItems = carItems.filter(x=>x.id!==id);  saveAll(); }
   render();
   toast('Item removed');
+}
+
+function toggleRsvp(mealId) {
+  const m = meals.find(x => x.id === mealId);
+  if (!m) return;
+  if (!m.attendees) m.attendees = [];
+  const idx = m.attendees.indexOf(currentUser.name);
+  if (idx === -1) {
+    m.attendees.push(currentUser.name);
+    toast(`${currentUser.name} is attending! 🍽`);
+  } else {
+    m.attendees.splice(idx, 1);
+    toast('RSVP removed');
+  }
+  saveAll();
+  renderMeals();
 }
 
 // ── Modal close ────────────────────────────────────────────────
