@@ -805,6 +805,7 @@ function renderChores() {
     if (!b.due) return -1;
     return new Date(a.due) - new Date(b.due);
   });
+  el.innerHTML = list.map(c => {
     const over = isOverdue(c.due) && c.status !== 'done';
     const badgeClass = c.status==='done' ? 'badge-done' : over ? 'badge-overdue' : 'badge-pending';
     const badgeText  = c.status==='done' ? '✓ Done' : over ? '⚠ Overdue' : 'Pending';
